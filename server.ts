@@ -26,7 +26,7 @@ const server = Bun.serve({
       path = "/index.html";
     }
 
-    const filePath = `./public${path}`;
+    const filePath = `./docs${path}`;
     const file = Bun.file(filePath);
 
     if (await file.exists()) {
