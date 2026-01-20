@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tile Slicer</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+    }
+
+    #sidebar {
+      width: 250px;
+      min-width: 250px;
+      height: 100vh;
+      background: #16213e;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      border-right: 2px solid #0f3460;
+    }
+
+    #sidebar h1 {
+      font-size: 1.5rem;
+      color: #e94560;
+      margin-bottom: 10px;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .control-group label {
+      font-size: 0.85rem;
+      color: #aaa;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .control-group input[type="text"],
+    .control-group input[type="file"] {
+      padding: 10px;
+      border: 1px solid #0f3460;
+      border-radius: 6px;
+      background: #1a1a2e;
+      color: #eee;
+      font-size: 1rem;
+    }
+
+    .control-group input[type="text"]:focus {
+      outline: none;
+      border-color: #e94560;
+    }
+
+    .btn {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: #e94560;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #ff6b6b;
+    }
+
+    .zoom-buttons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .zoom-btn {
+      flex: 1;
+      min-width: 50px;
+      padding: 8px;
+      background: #0f3460;
+      border: 1px solid #1a1a2e;
+      color: #eee;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .zoom-btn:hover {
+      background: #1a4a8e;
+    }
+
+    .zoom-btn.active {
+      background: #e94560;
+      border-color: #e94560;
+    }
+
+    .info-box {
+      margin-top: auto;
+      padding: 15px;
+      background: #0f3460;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      line-height: 1.6;
+    }
+
+    .info-box h3 {
+      color: #e94560;
+      margin-bottom: 8px;
+    }
+
+    #canvas-container {
+      flex: 1;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+      background: #0f0f1a;
+      background-image:
+        linear-gradient(45deg, #151525 25%, transparent 25%),
+        linear-gradient(-45deg, #151525 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #151525 75%),
+        linear-gradient(-45deg, transparent 75%, #151525 75%);
+      background-size: 20px 20px;
+      background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+    }
+
+    #main-canvas {
+      position: absolute;
+      cursor: grab;
+    }
+
+    #main-canvas.grabbing {
+      cursor: grabbing;
+    }
+
+    #overlay-canvas {
+      position: absolute;
+      pointer-events: none;
+    }
+
+    .drop-zone {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      color: #555;
+      pointer-events: none;
+    }
+
+    .drop-zone.hidden {
+      display: none;
+    }
+
+    .drop-zone svg {
+      width: 80px;
+      height: 80px;
+      margin-bottom: 15px;
+      opacity: 0.5;
+    }
+
+    #file-input {
+      display: none;
+    }
+
+    .status-bar {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      padding: 8px 12px;
+      background: rgba(0, 0, 0, 0.7);
+      border-radius: 4px;
+      font-size: 0.8rem;
+      color: #aaa;
+    }
+  </style>
+</head>
+<body>
+  <aside id="sidebar">
+    <h1>Tile Slicer</h1>
+
+    <div class="control-group">
+      <label>Load Image</label>
+      <button class="btn btn-primary" id="load-btn">Choose Image</button>
+      <input type="file" id="file-input" accept="image/*">
+    </div>
+
+    <div class="control-group">
+      <label>Slice Dimensions (tiles)</label>
+      <input type="text" id="slice-dim" value="1x1" placeholder="e.g. 5x3">
+      <small style="color:#666;">Width x Height in 16px tiles</small>
+    </div>
+
+    <div class="control-group">
+      <label>Zoom Level</label>
+      <div class="zoom-buttons">
+        <button class="zoom-btn" data-zoom="1">1x</button>
+        <button class="zoom-btn active" data-zoom="2">2x</button>
+        <button class="zoom-btn" data-zoom="4">4x</button>
+        <button class="zoom-btn" data-zoom="8">8x</button>
+        <button class="zoom-btn" data-zoom="16">16x</button>
+      </div>
+    </div>
+
+    <div class="info-box">
+      <h3>Instructions</h3>
+      <p><strong>Load:</strong> Click button or drag image</p>
+      <p><strong>Pan:</strong> Click and drag</p>
+      <p><strong>Slice:</strong> Press SPACE over region</p>
+      <p><strong>Grid:</strong> Each cell is 16x16px</p>
+    </div>
+  </aside>
+
+  <main id="canvas-container">
+    <canvas id="main-canvas"></canvas>
+    <canvas id="overlay-canvas"></canvas>
+    <div class="drop-zone" id="drop-zone">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+      </svg>
+      <p>Drop an image here or click "Choose Image"</p>
+    </div>
+    <div class="status-bar" id="status-bar">No image loaded</div>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>

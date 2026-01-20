@@ -1,0 +1,7 @@
+{
+  "name": "vibitiles",
+  "version": "1.0.0",
+  "scripts": {
+    "server": "bun run server.ts"
+  }
+}
