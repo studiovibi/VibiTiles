@@ -84,6 +84,36 @@
       background: #ff6b6b;
     }
 
+    .btn-secondary {
+      background: #0f3460;
+      color: #eee;
+      margin-top: 8px;
+    }
+
+    .btn-secondary:hover {
+      background: #1a4a8e;
+    }
+
+    .btn-cancel {
+      background: #444;
+      color: #eee;
+      margin-top: 8px;
+    }
+
+    .btn-cancel:hover {
+      background: #666;
+    }
+
+    .bordered-ui {
+      background: #0f3460;
+      padding: 12px;
+      border-radius: 6px;
+    }
+
+    .bordered-ui strong {
+      color: #e94560;
+    }
+
     .zoom-buttons {
       display: flex;
       gap: 8px;
@@ -202,6 +232,15 @@
       <label>Load Image</label>
       <button class="btn btn-primary" id="load-btn">Choose Image</button>
       <input type="file" id="file-input" accept="image/*">
+      <button class="btn btn-secondary" id="bordered-btn">Slice Bordered</button>
+    </div>
+
+    <div class="control-group bordered-ui" id="bordered-ui" style="display: none;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <canvas id="bordered-preview" width="32" height="32" style="border: 1px solid #0f3460; border-radius: 4px; background: #000;"></canvas>
+        <span id="bordered-instruction">Click on: <strong>Center</strong></span>
+      </div>
+      <button class="btn btn-cancel" id="bordered-cancel">Cancel</button>
     </div>
 
     <div class="control-group">

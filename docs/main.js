@@ -1,3 +1,35 @@
+// Bordered tile types definition (clockwise order: top → right → bottom → left)
+const borderedTileTypes = [
+  { id: 'center', name: 'Center', draw: (ctx, s) => { ctx.fillRect(0, 0, s, s); } },
+  // Edges (clockwise)
+  { id: 'edge_top', name: 'Top Edge', draw: (ctx, s) => { ctx.fillRect(0, s/2, s, s/2); } },
+  { id: 'edge_rgt', name: 'Right Edge', draw: (ctx, s) => { ctx.fillRect(0, 0, s/2, s); } },
+  { id: 'edge_bot', name: 'Bottom Edge', draw: (ctx, s) => { ctx.fillRect(0, 0, s, s/2); } },
+  { id: 'edge_lft', name: 'Left Edge', draw: (ctx, s) => { ctx.fillRect(s/2, 0, s/2, s); } },
+  // Outer corners (clockwise from top-left)
+  { id: 'outer_top_lft', name: 'Outer Top-Left', draw: (ctx, s) => { ctx.fillRect(s/2, s/2, s/2, s/2); } },
+  { id: 'outer_top_rgt', name: 'Outer Top-Right', draw: (ctx, s) => { ctx.fillRect(0, s/2, s/2, s/2); } },
+  { id: 'outer_bot_rgt', name: 'Outer Bottom-Right', draw: (ctx, s) => { ctx.fillRect(0, 0, s/2, s/2); } },
+  { id: 'outer_bot_lft', name: 'Outer Bottom-Left', draw: (ctx, s) => { ctx.fillRect(s/2, 0, s/2, s/2); } },
+  // Inner corners (clockwise from bottom-right)
+  { id: 'inner_bot_rgt', name: 'Inner Bottom-Right', draw: (ctx, s) => {
+    ctx.fillRect(0, 0, s, s);
+    ctx.clearRect(s/2, s/2, s/2, s/2);
+  }},
+  { id: 'inner_bot_lft', name: 'Inner Bottom-Left', draw: (ctx, s) => {
+    ctx.fillRect(0, 0, s, s);
+    ctx.clearRect(0, s/2, s/2, s/2);
+  }},
+  { id: 'inner_top_lft', name: 'Inner Top-Left', draw: (ctx, s) => {
+    ctx.fillRect(0, 0, s, s);
+    ctx.clearRect(0, 0, s/2, s/2);
+  }},
+  { id: 'inner_top_rgt', name: 'Inner Top-Right', draw: (ctx, s) => {
+    ctx.fillRect(0, 0, s, s);
+    ctx.clearRect(s/2, 0, s/2, s/2);
+  }}
+];
+
 // State
 const state = {
   image: null,
@@ -9,7 +41,11 @@ const state = {
   mousePos: { x: 0, y: 0 },
   isMouseOverImage: false,
   backgroundTile: null, // Canvas containing the background tile pixels
-  backgroundTileCoords: null // { x, y } in image coordinates
+  backgroundTileCoords: null, // { x, y } in image coordinates
+  // Bordered mode state
+  borderedMode: false,
+  borderedStep: 0,
+  borderedTiles: [] // Array of canvas elements for each collected tile
 };
 
 // DOM Elements
@@ -24,6 +60,12 @@ const sliceDimInput = document.getElementById('slice-dim');
 const zoomButtons = document.querySelectorAll('.zoom-btn');
 const dropZone = document.getElementById('drop-zone');
 const statusBar = document.getElementById('status-bar');
+const borderedBtn = document.getElementById('bordered-btn');
+const borderedUI = document.getElementById('bordered-ui');
+const borderedPreview = document.getElementById('bordered-preview');
+const borderedPreviewCtx = borderedPreview.getContext('2d');
+const borderedInstruction = document.getElementById('bordered-instruction');
+const borderedCancel = document.getElementById('bordered-cancel');
 
 // Initialize
 function init() {
@@ -85,6 +127,10 @@ function setupEventListeners() {
 
   // Keyboard events
   window.addEventListener('keydown', handleKeyDown);
+
+  // Bordered mode buttons
+  borderedBtn.addEventListener('click', startBorderedMode);
+  borderedCancel.addEventListener('click', cancelBorderedMode);
 }
 
 function handleFileSelect(e) {
@@ -133,6 +179,13 @@ function parseSliceDim() {
 
 function handleMouseDown(e) {
   if (!state.image) return;
+
+  // In bordered mode, clicks capture tiles instead of panning
+  if (state.borderedMode && state.isMouseOverImage) {
+    handleBorderedClick();
+    return;
+  }
+
   state.isDragging = true;
   state.dragStart = { x: e.clientX - state.pan.x, y: e.clientY - state.pan.y };
   mainCanvas.classList.add('grabbing');
@@ -424,6 +477,134 @@ function updateStatus(message) {
     ? ` | BG: (${state.backgroundTileCoords.x}, ${state.backgroundTileCoords.y})`
     : '';
   statusBar.textContent = `Image: ${state.image.width}x${state.image.height}px | Zoom: ${state.zoom}x | Selection: ${regionW}x${regionH}px (${width}x${height} tiles)${bgInfo}`;
+}
+
+// Bordered Mode Functions
+function startBorderedMode() {
+  if (!state.image) {
+    updateStatus('Please load an image first');
+    return;
+  }
+
+  state.borderedMode = true;
+  state.borderedStep = 0;
+  state.borderedTiles = [];
+
+  // Set slice dimensions to 1x1
+  sliceDimInput.value = '1x1';
+  parseSliceDim();
+
+  // Show bordered UI
+  borderedUI.style.display = 'block';
+  updateBorderedPreview();
+  updateStatus('Bordered mode: Click on each tile type');
+}
+
+function cancelBorderedMode() {
+  state.borderedMode = false;
+  state.borderedStep = 0;
+  state.borderedTiles = [];
+  borderedUI.style.display = 'none';
+  updateStatus();
+}
+
+function updateBorderedPreview() {
+  const tileType = borderedTileTypes[state.borderedStep];
+  const s = borderedPreview.width;
+
+  // Clear with black (outside)
+  borderedPreviewCtx.fillStyle = '#000';
+  borderedPreviewCtx.fillRect(0, 0, s, s);
+
+  // Draw red (inside) pattern
+  borderedPreviewCtx.fillStyle = '#e94560';
+  tileType.draw(borderedPreviewCtx, s);
+
+  // Update instruction text
+  borderedInstruction.innerHTML = `Click on: <strong>${tileType.name}</strong>`;
+}
+
+function handleBorderedClick() {
+  const tileSize = 16;
+  const imgPos = getImagePosition();
+
+  // Calculate which tile the mouse is over in original image coordinates
+  const imgX = (state.mousePos.x - imgPos.x) / state.zoom;
+  const imgY = (state.mousePos.y - imgPos.y) / state.zoom;
+
+  // Snap to 16px tile grid
+  const tileX = Math.floor(imgX / tileSize) * tileSize;
+  const tileY = Math.floor(imgY / tileSize) * tileSize;
+
+  // Create a canvas to store this tile
+  const tileCanvas = document.createElement('canvas');
+  tileCanvas.width = tileSize;
+  tileCanvas.height = tileSize;
+  const tileCtx = tileCanvas.getContext('2d');
+
+  // If a background tile is selected, draw it first
+  if (state.backgroundTile) {
+    tileCtx.drawImage(state.backgroundTile, 0, 0);
+  }
+
+  // Draw the tile from the image
+  tileCtx.drawImage(
+    state.image,
+    tileX, tileY, tileSize, tileSize,
+    0, 0, tileSize, tileSize
+  );
+
+  // Store this tile
+  state.borderedTiles.push(tileCanvas);
+  state.borderedStep++;
+
+  // Check if we've collected all tiles
+  if (state.borderedStep >= borderedTileTypes.length) {
+    finishBorderedMode();
+  } else {
+    updateBorderedPreview();
+    updateStatus(`Bordered mode: ${state.borderedStep}/${borderedTileTypes.length} tiles collected`);
+  }
+}
+
+async function finishBorderedMode() {
+  const name = prompt('Enter a name for the bordered tiles (e.g., water):');
+  if (!name || !name.trim()) {
+    cancelBorderedMode();
+    return;
+  }
+
+  const tileName = name.trim().replace(/[^a-zA-Z0-9_-]/g, '_');
+
+  // Create zip
+  const zip = new JSZip();
+
+  // Add each tile to the zip
+  for (let i = 0; i < borderedTileTypes.length; i++) {
+    const tileType = borderedTileTypes[i];
+    const tileCanvas = state.borderedTiles[i];
+
+    const dataUrl = tileCanvas.toDataURL('image/png');
+    const base64Data = dataUrl.split(',')[1];
+    zip.file(`${tileName}_${tileType.id}.png`, base64Data, { base64: true });
+  }
+
+  // Generate and download zip
+  const content = await zip.generateAsync({ type: 'blob' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(content);
+  link.download = `${tileName}_bordered.zip`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+
+  const bgNote = state.backgroundTile ? ' (with background)' : '';
+  updateStatus(`Exported 13 bordered tiles as ${tileName}_bordered.zip${bgNote}`);
+
+  // Exit bordered mode
+  state.borderedMode = false;
+  state.borderedStep = 0;
+  state.borderedTiles = [];
+  borderedUI.style.display = 'none';
 }
 
 // Start
